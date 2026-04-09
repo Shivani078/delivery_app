@@ -408,6 +408,9 @@ export default function App() {
   const [mapAllOrders,     setMapAllOrders]     = useState<Order[]>([])
   const [mapDriverLoc,     setMapDriverLoc]     = useState<DriverLocation | undefined>(undefined)
   const [mapSlotGroups,    setMapSlotGroups]    = useState<SlotGroup[]>([])
+  
+  // Callback to refresh dashboard orders when map completes delivery
+  const [refreshOrders,    setRefreshOrders]    = useState<(() => Promise<void>) | null>(null)
 
   // ── Called by dashboard "Start Delivery" button ────────────────────────────
   // Receives the full optimized order list + driver location from the dashboard
@@ -427,18 +430,48 @@ export default function App() {
 
   // ── Mark delivered (called from map HUD "Mark as Delivered") ───────────────
   const handleDeliveryComplete = async (orderId: string) => {
+    console.log("[page] handleDeliveryComplete called for orderId:", orderId)
     try {
-      await fetch(`/api/orders/${orderId}`, {
+      console.log("[page] sending PATCH request to /api/orders/" + orderId)
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "delivered" }),
+        body: JSON.stringify({ status: "done" }),
       })
+      console.log("[page] PATCH response status:", response.status)
+      const responseText = await response.text()
+      console.log("[page] PATCH response body:", responseText)
+      
+      let responseData: any
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {}
+      } catch {
+        responseData = responseText
+      }
+      console.log("[page] PATCH response data:", responseData)
+      
+      if (!response.ok) {
+        console.error("[page] ❌ PATCH failed with status:", response.status)
+        console.error("[page] Error details:", responseData)
+        return
+      }
+      
       // Remove the delivered order from the map list
       setMapAllOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: "delivered" as const } : o))
+        prev.map((o) => (o.id === orderId ? { ...o, status: "done" as const } : o))
       )
+      console.log("[page] ✅ updated mapAllOrders state for orderId:", orderId)
+      
+      // Trigger dashboard refresh to update counts
+      if (refreshOrders) {
+        console.log("[page] calling refreshOrders callback")
+        await refreshOrders()
+        console.log("[page] ✅ refreshOrders completed")
+      } else {
+        console.warn("[page] ⚠️ refreshOrders callback not available!")
+      }
     } catch (e) {
-      console.error("[page] delivery complete error:", e)
+      console.error("[page] ❌ delivery complete error:", e)
     }
   }
 
@@ -462,6 +495,7 @@ export default function App() {
         <TabsContent value="dashboard" className="m-0">
           <DeliveryDashboard
             onNavigateToMap={handleNavigateToMap}
+            onRegisterRefresh={setRefreshOrders}
           />
         </TabsContent>
 

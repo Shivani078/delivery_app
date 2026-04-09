@@ -66,6 +66,7 @@ function MapCanvas({
   const [routeKm,       setRouteKm]       = useState<number | null>(null)
   const [hudCollapsed,  setHudCollapsed]  = useState(false)
   const [voiceOn,       setVoiceOn]       = useState(true)
+  const [trafficOn,     setTrafficOn]     = useState(true)
   const [steps,         setSteps]         = useState<Step[]>([])
   const [currentStepI,  setCurrentStepI]  = useState(0)
   const [nextStepDist,  setNextStepDist]  = useState<string | null>(null)
@@ -117,18 +118,137 @@ function MapCanvas({
     map.on("movestart", (e: any) => { if (e.originalEvent) setFollow(false) })
 
     map.once("load", () => {
-      if (!mountedRef.current) return
-      map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } })
-      map.addLayer({ id: "route-case", type: "line", source: "route",
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#1a56db", "line-width": 12, "line-opacity": 0.4 } })
-      map.addLayer({ id: "route-line", type: "line", source: "route",
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#3b82f6", "line-width": 7 } })
-      map.resize()
-      mapReadyRef.current = true
-      if (mountedRef.current) setMapReady(true)
-    })
+  if (!mountedRef.current) return
+
+  // ROUTE SOURCE
+  map.addSource("route", {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: [],
+    },
+  })
+
+  // ROUTE TRAFFIC SOURCE
+  map.addSource("route-traffic", {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: [],
+    },
+  })
+
+  // ROUTE BACKGROUND
+  map.addLayer({
+    id: "route-case",
+    type: "line",
+    source: "route",
+    layout: {
+      "line-join": "round",
+      "line-cap": "round",
+    },
+    paint: {
+      "line-color": "#1a56db",
+      "line-width": 12,
+      "line-opacity": 0.4,
+    },
+  })
+
+  // 🔴 TRAFFIC SOURCE
+  map.addSource("traffic", {
+    type: "vector",
+    url: "mapbox://mapbox.mapbox-traffic-v1",
+  })
+
+  // 🔴 TRAFFIC LAYER
+  map.addLayer({
+    id: "traffic-layer",
+    type: "line",
+    source: "traffic",
+    "source-layer": "traffic",
+    layout: {
+      "line-join": "round",
+      "line-cap": "round",
+    },
+    paint: {
+      "line-width": [
+        "match",
+        ["get", "congestion"],
+        "low", 5,
+        "moderate", 14,
+        "heavy", 16,
+        "severe", 16,
+        6
+      ],
+      "line-color": [
+        "match",
+        ["get", "congestion"],
+        "low", "#bef264",
+        "moderate", "#dc2626",
+        "heavy", "#dc2626",
+        "severe", "#dc2626",
+        "rgba(0,0,0,0)"
+      ],
+      "line-opacity": 0.95,
+      "line-blur": 1,
+      "line-offset": 0.5,
+    },
+  })
+
+  // ROUTE LINE
+  map.addLayer({
+    id: "route-line",
+    type: "line",
+    source: "route",
+    layout: {
+      "line-join": "round",
+      "line-cap": "round",
+    },
+    paint: {
+      "line-color": "#0ea5e9",
+      "line-width": 8,
+      "line-opacity": 1,
+    },
+  })
+
+  // ROUTE TRAFFIC LAYER
+  map.addLayer({
+    id: "route-traffic-layer",
+    type: "line",
+    source: "route-traffic",
+    layout: {
+      "line-join": "round",
+      "line-cap": "round",
+    },
+    paint: {
+      "line-width": [
+        "match",
+        ["get", "congestion"],
+        "low", 8,
+        "moderate", 14,
+        "heavy", 18,
+        "severe", 20,
+        8
+      ],
+      "line-color": [
+        "match",
+        ["get", "congestion"],
+        "low", "#22c55e",
+        "moderate", "#dc2626",
+        "heavy", "#dc2626",
+        "severe", "#dc2626",
+        "rgba(0,0,0,0)"
+      ],
+      "line-opacity": 0.95,
+      "line-blur": 3,
+    },
+  })
+
+  map.resize()
+
+  mapReadyRef.current = true
+  if (mountedRef.current) setMapReady(true)
+})
 
     mapRef.current = map
     return () => {
@@ -148,6 +268,26 @@ function MapCanvas({
       pitch: next ? 55 : 0, bearing: next ? lastHeadingRef.current : 0, duration: 700,
     })
   }, [set3D])
+
+  const toggleTraffic = useCallback(() => {
+    setTrafficOn(v => !v)
+  }, [])
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return
+    if (!mapRef.current.getLayer("traffic-layer")) return
+    mapRef.current.setLayoutProperty(
+      "traffic-layer",
+      "visibility",
+      trafficOn ? "visible" : "none"
+    )
+    if (!mapRef.current.getLayer("route-traffic-layer")) return
+    mapRef.current.setLayoutProperty(
+      "route-traffic-layer",
+      "visibility",
+      trafficOn ? "visible" : "none"
+    )
+  }, [mapReady, trafficOn])
 
   // ── Draw route ────────────────────────────────────────────────────────────────
   const drawRoute = useCallback(async (from: [number, number]) => {
@@ -467,7 +607,7 @@ function MapCanvas({
 
       {/* Right-side controls */}
       {isNavMode && mapReady && !showArrival && (
-        <div className="absolute right-3 z-20 flex flex-col gap-2" style={{ top: "160px" }}>
+        <div className="absolute right-2 sm:right-3 z-20 flex flex-col gap-2" style={{ top: "160px" }}>
           <button onClick={toggle3D}
             className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center
               text-slate-800 hover:bg-slate-100 font-black text-xs tracking-tight transition-all"
@@ -478,6 +618,12 @@ function MapCanvas({
             className={`w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all
               ${voiceOn ? "bg-blue-600 text-white" : "bg-white text-slate-400"}`}>
             {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button onClick={toggleTraffic}
+            title={trafficOn ? "Hide route traffic" : "Show route traffic"}
+            className={`w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all
+              ${trafficOn ? "bg-red-600 text-white" : "bg-white text-slate-600"}`}>
+            <span className="text-[10px] font-black">🚦</span>
           </button>
           <button onClick={recenter}
             className={`w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all

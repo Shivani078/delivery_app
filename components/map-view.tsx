@@ -759,8 +759,8 @@ function MapCanvas({
                 {/* Manual trigger for arrival card */}
                 <button
                   onClick={() => { arrivedRef.current = true; setShowArrival(true) }}
-                  className="w-full mt-3 py-3 rounded-xl font-bold text-sm text-white
-                    bg-green-600 hover:bg-green-500 active:scale-95 transition-all">
+                  className="w-full mt-3 py-3 rounded-xl font-bold text-sm text-white bg-green-600 hover:bg-green-500 active:scale-95 transition-all"
+                >
                   📦 I'm Here — Confirm Delivery
                 </button>
                 {stopsLeft > 1 && (

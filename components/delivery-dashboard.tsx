@@ -39,6 +39,12 @@ export interface Order {
   delivery_slot?: string
   optimized_sequence?: number
   distance?: number
+  delivery_proof_url?: string
+  delivery_proof_uploaded_at?: string
+  delivery_proof_status?: string
+  delivery_otp?: string
+  delivery_otp_generated_at?: string
+  delivery_otp_verified_at?: string
 }
 
 export interface DriverLocation {
